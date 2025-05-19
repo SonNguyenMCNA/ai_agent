@@ -5,6 +5,9 @@ from docx import Document
 from io import BytesIO
 import openai
 
+# Lấy key từ secrets
+openai.api_key = st.secrets["key"]
+
 st.set_page_config(page_title="AI Agent Báo Cáo Đào Tạo", layout="centered")
 
 st.title("📊 AI Agent – Tổng Hợp Báo Cáo Đào Tạo Tự Động")
@@ -15,9 +18,6 @@ hoc_vien_file = st.file_uploader("📘 1. Danh sách học viên (HocVien.xlsx)"
 diem_danh_file = st.file_uploader("📝 2. Danh sách điểm danh (DiemDanh.xlsx)", type=["xlsx"])
 ket_qua_file = st.file_uploader("📈 3. Kết quả cuối khóa (KetQua.xlsx)", type=["xlsx"])
 template_file = st.file_uploader("📄 4. File mẫu báo cáo (Word Template)", type=["docx"])
-
-# OpenAI API key
-openai_api_key = st.text_input("🔑 Nhập OpenAI API Key để tạo nhận xét AI", type="password")
 
 if st.button("🚀 Tạo báo cáo") and all([hoc_vien_file, diem_danh_file, ket_qua_file, template_file]):
     # Đọc dữ liệu
@@ -33,20 +33,16 @@ if st.button("🚀 Tạo báo cáo") and all([hoc_vien_file, diem_danh_file, ket
     completion_rate = round(len(completed_students) / total_students * 100, 2)
     top_students = df_ket_qua.sort_values(by='Tổng điểm', ascending=False).head(3)
 
-    # Nhận xét từ GPT (nếu có API)
-    if openai_api_key:
-        openai.api_key = openai_api_key
-        prompt = f"Viết 3 dòng nhận xét tổng quan về khóa học có {total_students} học viên, tỉ lệ hoàn thành {completion_rate}%, điểm danh trung bình {attendance_rate}%, 3 học viên cao điểm nhất có điểm lần lượt là {top_students['Tổng điểm'].tolist()}."
-        try:
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[{"role": "user", "content": prompt}]
-            )
-            ai_comments = response.choices[0].message['content'].split("\n")
-        except:
-            ai_comments = ["Không thể kết nối GPT.", "", ""]
-    else:
-        ai_comments = ["Chưa nhập API Key.", "", ""]
+    # Nhận xét từ GPT
+    prompt = f"Viết 3 dòng nhận xét tổng quan về khóa học có {total_students} học viên, tỉ lệ hoàn thành {completion_rate}%, điểm danh trung bình {attendance_rate}%, 3 học viên cao điểm nhất có điểm lần lượt là {top_students['Tổng điểm'].tolist()}."
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        ai_comments = response.choices[0].message['content'].split("\n")
+    except:
+        ai_comments = ["Không thể kết nối GPT.", "", ""]
 
     # Tạo file Word báo cáo
     template_doc = Document(template_file)

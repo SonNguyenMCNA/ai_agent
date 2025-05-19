@@ -33,7 +33,27 @@ if st.button("🚀 Tạo báo cáo") and all([hoc_vien_file, diem_danh_file, ket
         gioi_xuat_sac_rate = round(len(df_ket_qua[df_ket_qua['Xếp loại'].isin(['Giỏi', 'Xuất sắc'])]) / total_students * 100, 2)
 
         # Gọi GPT để sinh nhận xét
-        prompt = f"Viết 3 dòng nhận xét tổng quan về khóa học có {total_students} học viên, tỉ lệ hoàn thành {completion_rate}%, điểm danh trung bình {attendance_rate}%, 3 học viên cao điểm nhất có điểm lần lượt là {top_students['Tổng điểm'].tolist()}."
+        # prompt = f"Viết 3 dòng nhận xét tổng quan về khóa học có {total_students} học viên, tỉ lệ hoàn thành {completion_rate}%, điểm danh trung bình {attendance_rate}%, 3 học viên cao điểm nhất có điểm lần lượt là {top_students['Tổng điểm'].tolist()}."
+        prompt = f"""
+        Bạn đóng vai trò là hệ thống đánh giá đào tạo nội bộ tại một doanh nghiệp lớn (ví dụ: Viettel). 
+        Hãy viết **một đoạn nhận xét từ 4–6 câu**, đánh giá tổng quan khóa học dựa trên các thông tin sau:
+        
+        - Tổng số học viên: {total_students}
+        - Tỉ lệ hoàn thành khóa học: {completion_rate}%
+        - Tỉ lệ đạt loại Giỏi – Xuất sắc: {gioi_xuat_sac_rate}%
+        - Tỉ lệ tham gia điểm danh trung bình: {attendance_rate}%
+        - Số học viên vắng có phép: {vang_phep}
+        - 3 học viên điểm cao nhất: {top_students['Họ tên'].tolist()} với điểm {top_students['Tổng điểm'].tolist()}
+        
+        Yêu cầu:
+        - Dùng giọng văn khách quan, chuyên nghiệp
+        - Nêu rõ xu hướng học tập (nghiêm túc/thiếu ổn định,...)
+        - Đánh giá năng lực chung
+        - Đề xuất ý tưởng/khuyến nghị nếu phù hợp
+        
+        Kết quả trả về: **một đoạn văn hoàn chỉnh**.
+        """
+
         try:
             response = client.chat.completions.create(
                 model="gpt-4",

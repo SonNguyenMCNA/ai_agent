@@ -2,14 +2,15 @@
 import streamlit as st
 import pandas as pd
 from docx import Document
+from docx.shared import Pt
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
 from io import BytesIO
 from openai import OpenAI
 
-# Sử dụng OpenAI client
 client = OpenAI(api_key=st.secrets["key"])
 
 st.set_page_config(page_title="AI Agent Báo Cáo Đào Tạo", layout="centered")
-
 st.title("📊 AI Agent – Tổng Hợp Báo Cáo Đào Tạo Tự Động")
 st.markdown("Tải lên 3 file Excel và 1 file Word template để tạo báo cáo tự động.")
 
@@ -18,9 +19,22 @@ diem_danh_file = st.file_uploader("📝 2. Danh sách điểm danh (DiemDanh.xls
 ket_qua_file = st.file_uploader("📈 3. Kết quả cuối khóa (KetQua.xlsx)", type=["xlsx"])
 template_file = st.file_uploader("📄 4. File mẫu báo cáo (Word Template)", type=["docx"])
 
+def set_paragraph_format(paragraph, font_name="Arial", font_size=12, spacing=1.3):
+    for run in paragraph.runs:
+        run.font.name = font_name
+        run.font.size = Pt(font_size)
+        run.font.bold = False
+    paragraph.style.font.name = font_name
+    paragraph.style._element.rPr.rFonts.set(qn("w:eastAsia"), font_name)
+    p = paragraph._p
+    pPr = p.get_or_add_pPr()
+    spacing_elm = OxmlElement("w:spacing")
+    spacing_elm.set(qn("w:line"), str(int(spacing * 240)))
+    spacing_elm.set(qn("w:lineRule"), "auto")
+    pPr.append(spacing_elm)
+
 if st.button("🚀 Tạo báo cáo") and all([hoc_vien_file, diem_danh_file, ket_qua_file, template_file]):
     try:
-        # Đọc dữ liệu
         df_hoc_vien = pd.read_excel(hoc_vien_file)
         df_diem_danh = pd.read_excel(diem_danh_file)
         df_ket_qua = pd.read_excel(ket_qua_file)
@@ -34,7 +48,6 @@ if st.button("🚀 Tạo báo cáo") and all([hoc_vien_file, diem_danh_file, ket
         vang_phep = df_diem_danh['Ghi chú'].str.contains("có phép", case=False).sum()
         gioi_xuat_sac_rate = round(len(df_ket_qua[df_ket_qua['Xếp loại'].isin(['Giỏi', 'Xuất sắc'])]) / total_students * 100, 2)
 
-        # Gọi GPT để sinh đoạn nhận xét chi tiết
         prompt = f"""
 Bạn đóng vai trò là hệ thống đánh giá đào tạo nội bộ tại một doanh nghiệp lớn (ví dụ: Viettel). 
 Hãy viết một đoạn nhận xét từ 4–6 câu, đánh giá tổng quan khóa học dựa trên các thông tin sau:
@@ -54,7 +67,6 @@ Yêu cầu:
 
 Kết quả trả về: một đoạn văn hoàn chỉnh.
 """
-
         try:
             response = client.chat.completions.create(
                 model="gpt-4",
@@ -65,34 +77,34 @@ Kết quả trả về: một đoạn văn hoàn chỉnh.
             ai_comment = "Không thể kết nối GPT để sinh nhận xét."
             st.error(f"Lỗi khi gọi GPT: {e}")
 
-        # Load template Word
         doc = Document(template_file)
-
-        # Ghi đè nội dung theo thứ tự đoạn văn chứa dấu "..." hoặc "........"
-        i = 0
-        data_lines = [
-            f"Khóa học: Ứng dụng AI vào công việc tại Viettel",
-            f"Thời gian: 15–17/05/2025",
-            f"Số học viên: {total_students} người",
-            f"Tỷ lệ hoàn thành: {completion_rate}%",
-            f"Tỷ lệ đạt loại Giỏi – Xuất sắc: {gioi_xuat_sac_rate}%",
-            "Danh sách học viên tiêu biểu:"
-        ]
-        for _, row in top_students.iterrows():
-            data_lines.append(f"- {row['Họ tên']} – {row['Tổng điểm']} điểm – {row['Xếp loại']}")
-        data_lines += [
-            "Thống kê điểm danh:",
-            f"- Trung bình mỗi học viên tham gia {attendance_rate}% số buổi",
-            f"- Số trường hợp vắng mặt có phép: {vang_phep}",
-            "Nhận xét tổng quan của hệ thống AI:",
-            ai_comment
-        ]
+        placeholders = {
+            "Khóa học: ....................................................": "Khóa học: Ứng dụng AI vào công việc tại Viettel",
+            "Thời gian: ....................................................": "Thời gian: 15–17/05/2025",
+            "Số học viên: ........ người": f"Số học viên: {total_students} người",
+            "Tỷ lệ hoàn thành: ........%": f"Tỷ lệ hoàn thành: {completion_rate}%",
+            "Tỷ lệ đạt loại Giỏi – Xuất sắc: ........%": f"Tỷ lệ đạt loại Giỏi – Xuất sắc: {gioi_xuat_sac_rate}%",
+            "- ....................................................": [f"- {row['Họ tên']} – {row['Tổng điểm']} điểm – {row['Xếp loại']}" for _, row in top_students.iterrows()],
+            "- Trung bình mỗi học viên tham gia ........% số buổi": f"- Trung bình mỗi học viên tham gia {attendance_rate}% số buổi",
+            "- Số trường hợp vắng mặt có phép: ...": f"- Số trường hợp vắng mặt có phép: {vang_phep}",
+            "- ..............................................................................": [f"- {line.strip()}" for line in ai_comment.split(". ") if line.strip()]
+        }
 
         for para in doc.paragraphs:
-            if "..." in para.text or "........" in para.text:
-                if i < len(data_lines):
-                    para.text = data_lines[i]
-                    i += 1
+            text = para.text.strip()
+            if text in placeholders:
+                replacement = placeholders[text]
+                if isinstance(replacement, list):
+                    parent = para._element.getparent()
+                    idx = parent.index(para._element)
+                    parent.remove(para._element)
+                    for i, val in enumerate(replacement):
+                        new_para = doc.add_paragraph(val)
+                        set_paragraph_format(new_para)
+                        parent.insert(idx + i, new_para._element)
+                else:
+                    para.text = replacement
+                    set_paragraph_format(para)
 
         output_stream = BytesIO()
         doc.save(output_stream)
